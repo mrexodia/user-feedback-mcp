@@ -8,7 +8,9 @@ To install the MCP server in Cline, follow these steps (see screenshot):
 
 ![Screenshot showing installation steps](.github/cline-installation.png)
 
-1. Install [uv](https://github.com/astral-sh/uv) globally: `pip install uv`
+1. Install [uv](https://github.com/astral-sh/uv) globally:
+   - Windows: `pip install uv`
+   - Linux/Mac: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. Clone this repository, for this example `C:\MCP\user-feedback-mcp`.
 3. Navigate to the Cline _MCP Servers_ configuration (see screenshot).
 4. Click on the _Installed_ tab.
