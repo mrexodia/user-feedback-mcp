@@ -12,3 +12,4 @@ venv*/
 
 # Logs
 *.log
+.user-feedback.json

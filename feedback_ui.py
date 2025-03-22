@@ -2,23 +2,59 @@ import json
 import os
 import subprocess
 import threading
-from typing import Optional
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional, TypedDict
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit, QFrame,
-    QGroupBox
+    QGroupBox, QDialog
 )
-from PySide6.QtCore import Qt, Signal, QObject
-from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import Qt, Signal, QObject, QTimer
+from PySide6.QtGui import QTextCursor, QIcon
 
-class FeedbackResult(BaseModel):
+class FeedbackResult(TypedDict):
     user_feedback: str
     logs: str
 
-class FeedbackConfig(BaseModel):
+class FeedbackConfig(TypedDict):
     run_command: str
     execute_automatically: bool = False
+
+class ConsoleDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Console")
+        self.setModal(False)
+        self.resize(600, 400)
+        self.setWindowIcon(QIcon("icons/terminal.png"))
+
+        layout = QVBoxLayout(self)
+
+        # Log text area
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        layout.addWidget(self.log_text)
+
+        # Clear button
+        button_layout = QHBoxLayout()
+        self.clear_button = QPushButton("Clear")
+        self.clear_button.clicked.connect(self.clear_logs)
+        button_layout.addStretch()
+        button_layout.addWidget(self.clear_button)
+        layout.addLayout(button_layout)
+
+    def append_log(self, text: str):
+        self.log_text.append(text.rstrip())
+        cursor = self.log_text.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.log_text.setTextCursor(cursor)
+
+    def clear_logs(self):
+        self.log_text.clear()
+
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
 
 class LogSignals(QObject):
     append_log = Signal(str)
@@ -37,18 +73,22 @@ class FeedbackUI(QMainWindow):
         self.log_signals = LogSignals()
         self.log_signals.append_log.connect(self._append_log)
 
+        # Create console dialog
+        self.console = ConsoleDialog(self)
+
         self.setWindowTitle("User Feedback")
-        self.setFixedSize(600, 800)
+        self.setFixedSize(600, 500)  # Reduced height since logs moved to console
+        self.setWindowIcon(QIcon("icons/feedback.png"))
 
         # Center the window
         screen = QApplication.primaryScreen().geometry()
         x = (screen.width() - 600) // 2
-        y = (screen.height() - 800) // 2
-        self.setGeometry(x, y, 600, 800)
+        y = (screen.height() - 500) // 2
+        self.setGeometry(x, y, 600, 500)
 
         self._create_ui()
 
-        if self.config.execute_automatically:
+        if self.config.get("execute_automatically", False):
             self._run_command()
 
     def _load_config(self) -> FeedbackConfig:
@@ -62,7 +102,8 @@ class FeedbackUI(QMainWindow):
 
     def _save_config(self):
         with open(self.config_path, 'w') as f:
-            json.dump(self.config.dict(), f, indent=2)
+            json.dump(self.config, f, indent=2)
+        print("Config saved!")
 
     def _create_ui(self):
         central_widget = QWidget()
@@ -76,7 +117,9 @@ class FeedbackUI(QMainWindow):
 
         command_label = QLabel("Command:")
         self.command_entry = QLineEdit()
-        self.command_entry.setText(self.config.run_command)
+        self.command_entry.setText(self.config["run_command"])
+        self.command_entry.returnPressed.connect(self._run_command)
+        self.command_entry.textChanged.connect(self._update_config)
         self.run_button = QPushButton("Run")
         self.run_button.clicked.connect(self._run_command)
 
@@ -91,7 +134,7 @@ class FeedbackUI(QMainWindow):
         auto_layout.setContentsMargins(5, 0, 5, 5)
 
         self.auto_check = QCheckBox("Execute automatically")
-        self.auto_check.setChecked(self.config.execute_automatically)
+        self.auto_check.setChecked(self.config.get("execute_automatically", False))
         self.auto_check.stateChanged.connect(self._update_config)
 
         save_button = QPushButton("Save Configuration")
@@ -101,14 +144,6 @@ class FeedbackUI(QMainWindow):
         auto_layout.addStretch()
         auto_layout.addWidget(save_button)
         layout.addWidget(auto_frame)
-
-        # Log output
-        log_group = QGroupBox("Output")
-        log_layout = QVBoxLayout(log_group)
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        log_layout.addWidget(self.log_text)
-        layout.addWidget(log_group)
 
         # Feedback section
         feedback_group = QGroupBox("Feedback")
@@ -125,15 +160,22 @@ class FeedbackUI(QMainWindow):
         layout.addWidget(feedback_group)
 
     def _update_config(self):
-        self.config.run_command = self.command_entry.text()
-        self.config.execute_automatically = self.auto_check.isChecked()
+        self.config = {
+            "run_command": self.command_entry.text(),
+            "execute_automatically": self.auto_check.isChecked()
+        }
 
     def _append_log(self, text: str):
         self.log_buffer.append(text)
-        self.log_text.append(text)
-        cursor = self.log_text.textCursor()
-        cursor.movePosition(QTextCursor.End)
-        self.log_text.setTextCursor(cursor)
+        self.console.append_log(text)
+
+    def _check_process_status(self):
+        if self.process and self.process.poll() is not None:
+            # Process has terminated
+            self.run_button.setText("Run")
+            self.process = None
+            self.activateWindow()
+            self.feedback_text.setFocus()
 
     def _run_command(self):
         if self.process:
@@ -144,11 +186,13 @@ class FeedbackUI(QMainWindow):
 
         command = self.command_entry.text()
         if not command:
-            self._append_log("Please enter a command to run\n")
+            self.console.append_log("Please enter a command to run\n")
             return
 
-        self.log_text.clear()
-        self.log_buffer = []
+        if not self.console.isVisible():
+            self.console.show()
+
+        self.console.append_log(f"$ {command}\n")
         self.run_button.setText("Stop")
 
         try:
@@ -162,10 +206,9 @@ class FeedbackUI(QMainWindow):
                 bufsize=1
             )
 
-            def read_output(pipe, prefix=""):
+            def read_output(pipe):
                 for line in iter(pipe.readline, ''):
-                    line_with_prefix = f"{prefix}{line}"
-                    self.log_signals.append_log.emit(line_with_prefix)
+                    self.log_signals.append_log.emit(line)
 
             threading.Thread(
                 target=read_output,
@@ -175,13 +218,18 @@ class FeedbackUI(QMainWindow):
 
             threading.Thread(
                 target=read_output,
-                args=(self.process.stderr, "ERROR: "),
+                args=(self.process.stderr,),
                 daemon=True
             ).start()
 
+            # Start process status checking
+            self.status_timer = QTimer()
+            self.status_timer.timeout.connect(self._check_process_status)
+            self.status_timer.start(100)  # Check every 100ms
+
         except Exception as e:
-            self._append_log(f"Error running command: {str(e)}\n")
-            self.run_button.setText("Run")
+            self.console.append_log(f"Error running command: {str(e)}\n")
+            self.run_button.setText("&Run")
 
     def _submit_feedback(self):
         self.feedback_result = FeedbackResult(
@@ -189,6 +237,11 @@ class FeedbackUI(QMainWindow):
             logs="".join(self.log_buffer)
         )
         self.close()
+
+    def closeEvent(self, event):
+        if self.console:
+            self.console.close()
+        super().closeEvent(event)
 
     def run(self) -> FeedbackResult:
         self.show()
@@ -216,5 +269,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     result = feedback_ui(os.getcwd(), args.prompt)
-    print(f"\nFeedback received: {result.user_feedback}")
-    print(f"\nLogs collected: \n{result.logs}")
+    print(f"\nFeedback received: {result['user_feedback']}")
+    print(f"\nLogs collected: \n{result['logs']}")
