@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import psutil
 import argparse
 import subprocess
 import threading
@@ -70,6 +71,20 @@ def get_dark_mode_palette(app: QApplication):
     darkPalette.setColor(QPalette.HighlightedText, Qt.white)
     darkPalette.setColor(QPalette.Disabled, QPalette.HighlightedText, QColor(127, 127, 127))
     return darkPalette
+
+def kill_tree(process: subprocess.Popen):
+    killed: list[psutil.Process] = []
+    parent = psutil.Process(process.pid)
+    for proc in parent.children(recursive=True):
+        proc.kill()
+        killed.append(proc)
+    parent.kill()
+    killed.append(parent)
+
+    # Terminate any remaining processes
+    for proc in killed:
+        if proc.is_running():
+            proc.terminate()
 
 class FeedbackTextEdit(QTextEdit):
     def __init__(self, parent=None):
@@ -257,7 +272,7 @@ class FeedbackUI(QMainWindow):
 
     def _run_command(self):
         if self.process:
-            self.process.terminate()
+            kill_tree(self.process)
             self.process = None
             self.run_button.setText("&Run")
             return
@@ -326,7 +341,7 @@ class FeedbackUI(QMainWindow):
         settings.setValue("windowState", self.saveState())
 
         if self.process:
-            self.process.terminate()
+            kill_tree(self.process)
         super().closeEvent(event)
 
     def run(self) -> FeedbackResult:
@@ -334,7 +349,7 @@ class FeedbackUI(QMainWindow):
         QApplication.instance().exec()
 
         if self.process:
-            self.process.terminate()
+            kill_tree(self.process)
 
         if not self.feedback_result:
             return FeedbackResult(logs="".join(self.log_buffer), user_feedback="")
