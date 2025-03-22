@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit, QGroupBox
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer, QSettings
-from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent
+from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent, QFont, QFontDatabase
 
 class FeedbackTextEdit(QTextEdit):
     def __init__(self, parent=None):
@@ -155,6 +155,9 @@ class FeedbackUI(QMainWindow):
         # Log text area
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        font = QFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        font.setPointSize(9)
+        self.log_text.setFont(font)
         console_layout.addWidget(self.log_text)
 
         # Clear button
@@ -185,6 +188,8 @@ class FeedbackUI(QMainWindow):
     def _check_process_status(self):
         if self.process and self.process.poll() is not None:
             # Process has terminated
+            exit_code = self.process.poll()
+            self._append_log(f"\nProcess exited with code {exit_code}\n")
             self.run_button.setText("Run")
             self.process = None
             self.activateWindow()
