@@ -1,6 +1,6 @@
 # User Feedback MCP
 
-This is a project based on [FastMCP](https://github.com/jlowin/fastmcp), to make it easier for the LLM to collect user feedback that requires manual interaction.
+This is a project based on [FastMCP](https://github.com/jlowin/fastmcp), to make it easier for the LLM to collect user feedback that requires manual interaction. For more information about the Model Context Protol, see [this post](https://glama.ai/blog/2024-11-25-model-context-protocol-quickstart).
 
 ## Development
 
