@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit, QFrame,
     QGroupBox, QDialog
 )
-from PySide6.QtCore import Qt, Signal, QObject, QTimer
+from PySide6.QtCore import Qt, Signal, QObject, QTimer, QSettings
 from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent
 
 class FeedbackTextEdit(QTextEdit):
@@ -41,8 +41,15 @@ class ConsoleDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Console")
         self.setModal(False)
-        self.resize(600, 400)
         self.setWindowIcon(QIcon("icons/terminal.png"))
+
+        # Restore window geometry
+        settings = QSettings('UserFeedback', 'Console')
+        geometry = settings.value('geometry')
+        if geometry:
+            self.restoreGeometry(geometry)
+        else:
+            self.resize(600, 400)
 
         layout = QVBoxLayout(self)
 
@@ -69,6 +76,9 @@ class ConsoleDialog(QDialog):
         self.log_text.clear()
 
     def closeEvent(self, event):
+        # Save window geometry
+        settings = QSettings('UserFeedback', 'Console')
+        settings.setValue('geometry', self.saveGeometry())
         event.ignore()
         self.hide()
 
@@ -96,11 +106,17 @@ class FeedbackUI(QMainWindow):
         self.setFixedSize(600, 500)  # Reduced height since logs moved to console
         self.setWindowIcon(QIcon("icons/feedback.png"))
 
-        # Center the window
-        screen = QApplication.primaryScreen().geometry()
-        x = (screen.width() - 600) // 2
-        y = (screen.height() - 500) // 2
-        self.setGeometry(x, y, 600, 500)
+        # Restore window geometry
+        settings = QSettings('UserFeedback', 'MainWindow')
+        geometry = settings.value('geometry')
+        if geometry:
+            self.restoreGeometry(geometry)
+        else:
+            # Center the window as fallback
+            screen = QApplication.primaryScreen().geometry()
+            x = (screen.width() - 600) // 2
+            y = (screen.height() - 500) // 2
+            self.setGeometry(x, y, 600, 500)
 
         self._create_ui()
 
@@ -200,6 +216,9 @@ class FeedbackUI(QMainWindow):
             self.run_button.setText("Run")
             return
 
+        # Clear the log buffer but keep UI logs visible
+        self.log_buffer = []
+
         command = self.command_entry.text()
         if not command:
             self.console.append_log("Please enter a command to run\n")
@@ -255,6 +274,10 @@ class FeedbackUI(QMainWindow):
         self.close()
 
     def closeEvent(self, event):
+        # Save window geometry
+        settings = QSettings('UserFeedback', 'MainWindow')
+        settings.setValue('geometry', self.saveGeometry())
+
         if self.console:
             self.console.close()
         super().closeEvent(event)
