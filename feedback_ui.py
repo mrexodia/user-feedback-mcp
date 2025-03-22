@@ -14,6 +14,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QObject, QTimer, QSettings
 from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent, QFont, QFontDatabase, QPalette, QColor
 
+class FeedbackResult(TypedDict):
+    command_logs: str
+    user_feedback: str
+
+class FeedbackConfig(TypedDict):
+    run_command: str
+    execute_automatically: bool = False
+
 def set_dark_title_bar(widget: QWidget, dark_title_bar: bool) -> None:
     # Ensure we're on Windows
     if sys.platform != "win32":
@@ -70,6 +78,7 @@ def get_dark_mode_palette(app: QApplication):
     darkPalette.setColor(QPalette.Disabled, QPalette.Highlight, QColor(80, 80, 80))
     darkPalette.setColor(QPalette.HighlightedText, Qt.white)
     darkPalette.setColor(QPalette.Disabled, QPalette.HighlightedText, QColor(127, 127, 127))
+    darkPalette.setColor(QPalette.PlaceholderText, QColor(127, 127, 127))
     return darkPalette
 
 def kill_tree(process: subprocess.Popen):
@@ -100,14 +109,6 @@ class FeedbackTextEdit(QTextEdit):
                 parent._submit_feedback()
         else:
             super().keyPressEvent(event)
-
-class FeedbackResult(TypedDict):
-    logs: str
-    user_feedback: str
-
-class FeedbackConfig(TypedDict):
-    run_command: str
-    execute_automatically: bool = False
 
 class LogSignals(QObject):
     append_log = Signal(str)
@@ -212,13 +213,12 @@ class FeedbackUI(QMainWindow):
         feedback_layout = QVBoxLayout(feedback_group)
         feedback_group.setFixedHeight(150)
 
-        prompt_label = QLabel(self.prompt)
         self.feedback_text = FeedbackTextEdit()
         self.feedback_text.setMinimumHeight(60)
+        self.feedback_text.setPlaceholderText(self.prompt)
         submit_button = QPushButton("Submit &Feedback (Ctrl+Enter)")
         submit_button.clicked.connect(self._submit_feedback)
 
-        feedback_layout.addWidget(prompt_label)
         feedback_layout.addWidget(self.feedback_text)
         feedback_layout.addWidget(submit_button)
 
@@ -365,7 +365,7 @@ def feedback_ui(project_directory: str, prompt: str) -> FeedbackResult:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the feedback UI")
-    parser.add_argument("--prompt", default="Give your feedback", help="The prompt to show to the user")
+    parser.add_argument("--prompt", default="I implemented the changes you requested.", help="The prompt to show to the user")
     args = parser.parse_args()
 
     result = feedback_ui(os.getcwd(), args.prompt)
