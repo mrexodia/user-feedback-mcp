@@ -1,5 +1,6 @@
-import json
 import os
+import sys
+import json
 import argparse
 import subprocess
 import threading
@@ -10,7 +11,65 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit, QGroupBox
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer, QSettings
-from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent, QFont, QFontDatabase
+from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent, QFont, QFontDatabase, QPalette, QColor
+
+def set_dark_title_bar(widget: QWidget, dark_title_bar: bool) -> None:
+    # Ensure we're on Windows
+    if sys.platform != "win32":
+        return
+
+    from ctypes import windll, c_uint32, byref
+
+    # Get Windows build number
+    build_number = sys.getwindowsversion().build
+    if build_number < 17763:  # Windows 10 1809 minimum
+        return
+
+    # Check if the widget's property already matches the setting
+    dark_prop = widget.property("DarkTitleBar")
+    if dark_prop is not None and dark_prop == dark_title_bar:
+        return
+
+    # Set the property (True if dark_title_bar != 0, False otherwise)
+    widget.setProperty("DarkTitleBar", dark_title_bar)
+
+    # Load dwmapi.dll and call DwmSetWindowAttribute
+    dwmapi = windll.dwmapi
+    hwnd = widget.winId()  # Get the window handle
+    attribute = 20 if build_number >= 18985 else 19  # Use newer attribute for newer builds
+    c_dark_title_bar = c_uint32(dark_title_bar)  # Convert to C-compatible uint32
+    dwmapi.DwmSetWindowAttribute(hwnd, attribute, byref(c_dark_title_bar), 4)
+
+    # HACK: Create a 1x1 pixel frameless window to force redraw
+    temp_widget = QWidget(None, Qt.FramelessWindowHint)
+    temp_widget.resize(1, 1)
+    temp_widget.move(widget.pos())
+    temp_widget.show()
+    temp_widget.deleteLater()  # Safe deletion in Qt event loop
+
+def get_dark_mode_palette(app: QApplication):
+    darkPalette = app.palette()
+    darkPalette.setColor(QPalette.Window, QColor(53, 53, 53))
+    darkPalette.setColor(QPalette.WindowText, Qt.white)
+    darkPalette.setColor(QPalette.Disabled, QPalette.WindowText, QColor(127, 127, 127))
+    darkPalette.setColor(QPalette.Base, QColor(42, 42, 42))
+    darkPalette.setColor(QPalette.AlternateBase, QColor(66, 66, 66))
+    darkPalette.setColor(QPalette.ToolTipBase, QColor(53, 53, 53))
+    darkPalette.setColor(QPalette.ToolTipText, Qt.white)
+    darkPalette.setColor(QPalette.Text, Qt.white)
+    darkPalette.setColor(QPalette.Disabled, QPalette.Text, QColor(127, 127, 127))
+    darkPalette.setColor(QPalette.Dark, QColor(35, 35, 35))
+    darkPalette.setColor(QPalette.Shadow, QColor(20, 20, 20))
+    darkPalette.setColor(QPalette.Button, QColor(53, 53, 53))
+    darkPalette.setColor(QPalette.ButtonText, Qt.white)
+    darkPalette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(127, 127, 127))
+    darkPalette.setColor(QPalette.BrightText, Qt.red)
+    darkPalette.setColor(QPalette.Link, QColor(42, 130, 218))
+    darkPalette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    darkPalette.setColor(QPalette.Disabled, QPalette.Highlight, QColor(80, 80, 80))
+    darkPalette.setColor(QPalette.HighlightedText, Qt.white)
+    darkPalette.setColor(QPalette.Disabled, QPalette.HighlightedText, QColor(127, 127, 127))
+    return darkPalette
 
 class FeedbackTextEdit(QTextEdit):
     def __init__(self, parent=None):
@@ -75,6 +134,8 @@ class FeedbackUI(QMainWindow):
         if state:
             self.restoreState(state)
 
+        set_dark_title_bar(self, True)
+
         if self.config.get("execute_automatically", False):
             self._run_command()
 
@@ -90,7 +151,6 @@ class FeedbackUI(QMainWindow):
     def _save_config(self):
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=2)
-        print("Config saved!")
 
     def _create_ui(self):
         central_widget = QWidget()
@@ -108,7 +168,7 @@ class FeedbackUI(QMainWindow):
         self.command_entry.setText(self.config["run_command"])
         self.command_entry.returnPressed.connect(self._run_command)
         self.command_entry.textChanged.connect(self._update_config)
-        self.run_button = QPushButton("Run")
+        self.run_button = QPushButton("&Run")
         self.run_button.clicked.connect(self._run_command)
 
         command_input_layout.addWidget(command_label)
@@ -122,7 +182,7 @@ class FeedbackUI(QMainWindow):
         self.auto_check.setChecked(self.config.get("execute_automatically", False))
         self.auto_check.stateChanged.connect(self._update_config)
 
-        save_button = QPushButton("Save Configuration")
+        save_button = QPushButton("&Save Configuration")
         save_button.clicked.connect(self._save_config)
 
         auto_layout.addWidget(self.auto_check)
@@ -135,12 +195,12 @@ class FeedbackUI(QMainWindow):
         # Feedback section with fixed size
         feedback_group = QGroupBox("Feedback")
         feedback_layout = QVBoxLayout(feedback_group)
-        feedback_group.setFixedHeight(150)  # Fixed height for feedback section
+        feedback_group.setFixedHeight(150)
 
         prompt_label = QLabel(self.prompt)
         self.feedback_text = FeedbackTextEdit()
-        self.feedback_text.setMinimumHeight(60)  # Set minimum height for feedback text box
-        submit_button = QPushButton("Submit Feedback")
+        self.feedback_text.setMinimumHeight(60)
+        submit_button = QPushButton("Submit &Feedback (Ctrl+Enter)")
         submit_button.clicked.connect(self._submit_feedback)
 
         feedback_layout.addWidget(prompt_label)
@@ -150,7 +210,7 @@ class FeedbackUI(QMainWindow):
         # Console section (takes remaining space)
         console_group = QGroupBox("Console")
         console_layout = QVBoxLayout(console_group)
-        console_group.setMinimumHeight(200)  # Minimum height for console
+        console_group.setMinimumHeight(200)
 
         # Log text area
         self.log_text = QTextEdit()
@@ -162,7 +222,7 @@ class FeedbackUI(QMainWindow):
 
         # Clear button
         button_layout = QHBoxLayout()
-        self.clear_button = QPushButton("Clear")
+        self.clear_button = QPushButton("&Clear")
         self.clear_button.clicked.connect(self.clear_logs)
         button_layout.addStretch()
         button_layout.addWidget(self.clear_button)
@@ -190,7 +250,7 @@ class FeedbackUI(QMainWindow):
             # Process has terminated
             exit_code = self.process.poll()
             self._append_log(f"\nProcess exited with code {exit_code}\n")
-            self.run_button.setText("Run")
+            self.run_button.setText("&Run")
             self.process = None
             self.activateWindow()
             self.feedback_text.setFocus()
@@ -199,7 +259,7 @@ class FeedbackUI(QMainWindow):
         if self.process:
             self.process.terminate()
             self.process = None
-            self.run_button.setText("Run")
+            self.run_button.setText("&Run")
             return
 
         # Clear the log buffer but keep UI logs visible
@@ -211,7 +271,7 @@ class FeedbackUI(QMainWindow):
             return
 
         self._append_log(f"$ {command}\n")
-        self.run_button.setText("Stop")
+        self.run_button.setText("Sto&p")
 
         try:
             self.process = subprocess.Popen(
@@ -282,7 +342,9 @@ class FeedbackUI(QMainWindow):
         return self.feedback_result
 
 def feedback_ui(project_directory: str, prompt: str) -> FeedbackResult:
-    app = QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication()
+    app.setPalette(get_dark_mode_palette(app))
+    app.setStyle("Fusion")
     ui = FeedbackUI(project_directory, prompt)
     return ui.run()
 
