@@ -3,12 +3,11 @@ import os
 import argparse
 import subprocess
 import threading
-from datetime import datetime
 from typing import Optional, TypedDict
+
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit, QFrame,
-    QGroupBox, QDialog
+    QLabel, QLineEdit, QPushButton, QCheckBox, QTextEdit, QGroupBox
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer, QSettings
 from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent
@@ -29,58 +28,12 @@ class FeedbackTextEdit(QTextEdit):
             super().keyPressEvent(event)
 
 class FeedbackResult(TypedDict):
-    user_feedback: str
     logs: str
+    user_feedback: str
 
 class FeedbackConfig(TypedDict):
     run_command: str
     execute_automatically: bool = False
-
-class ConsoleDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Console")
-        self.setModal(False)
-        self.setWindowIcon(QIcon("icons/terminal.png"))
-
-        # Restore window geometry
-        settings = QSettings('UserFeedback', 'Console')
-        geometry = settings.value('geometry')
-        if geometry:
-            self.restoreGeometry(geometry)
-        else:
-            self.resize(600, 400)
-
-        layout = QVBoxLayout(self)
-
-        # Log text area
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        layout.addWidget(self.log_text)
-
-        # Clear button
-        button_layout = QHBoxLayout()
-        self.clear_button = QPushButton("Clear")
-        self.clear_button.clicked.connect(self.clear_logs)
-        button_layout.addStretch()
-        button_layout.addWidget(self.clear_button)
-        layout.addLayout(button_layout)
-
-    def append_log(self, text: str):
-        self.log_text.append(text.rstrip())
-        cursor = self.log_text.textCursor()
-        cursor.movePosition(QTextCursor.End)
-        self.log_text.setTextCursor(cursor)
-
-    def clear_logs(self):
-        self.log_text.clear()
-
-    def closeEvent(self, event):
-        # Save window geometry
-        settings = QSettings('UserFeedback', 'Console')
-        settings.setValue('geometry', self.saveGeometry())
-        event.ignore()
-        self.hide()
 
 class LogSignals(QObject):
     append_log = Signal(str)
@@ -90,7 +43,7 @@ class FeedbackUI(QMainWindow):
         super().__init__()
         self.project_directory = project_directory
         self.prompt = prompt
-        self.config_path = os.path.join(project_directory, '.user-feedback.json')
+        self.config_path = os.path.join(project_directory, ".user-feedback.json")
         self.config = self._load_config()
 
         self.process: Optional[subprocess.Popen] = None
@@ -99,26 +52,28 @@ class FeedbackUI(QMainWindow):
         self.log_signals = LogSignals()
         self.log_signals.append_log.connect(self._append_log)
 
-        # Create console dialog
-        self.console = ConsoleDialog(self)
-
         self.setWindowTitle("User Feedback")
-        self.setFixedSize(600, 500)  # Reduced height since logs moved to console
         self.setWindowIcon(QIcon("icons/feedback.png"))
 
+        self._create_ui()
+
         # Restore window geometry
-        settings = QSettings('UserFeedback', 'MainWindow')
-        geometry = settings.value('geometry')
+        settings = QSettings("UserFeedback", "MainWindow")
+        geometry = settings.value("geometry")
         if geometry:
             self.restoreGeometry(geometry)
         else:
-            # Center the window as fallback
+            # Default size and center on screen
+            self.resize(800, 600)
             screen = QApplication.primaryScreen().geometry()
-            x = (screen.width() - 600) // 2
-            y = (screen.height() - 500) // 2
-            self.setGeometry(x, y, 600, 500)
+            x = (screen.width() - 800) // 2
+            y = (screen.height() - 600) // 2
+            self.move(x, y)
 
-        self._create_ui()
+        # Restore window state
+        state = settings.value("windowState")
+        if state:
+            self.restoreState(state)
 
         if self.config.get("execute_automatically", False):
             self._run_command()
@@ -126,14 +81,14 @@ class FeedbackUI(QMainWindow):
     def _load_config(self) -> FeedbackConfig:
         try:
             if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as f:
+                with open(self.config_path, "r") as f:
                     return FeedbackConfig(**json.load(f))
         except Exception:
             pass
         return FeedbackConfig(run_command="", execute_automatically=False)
 
     def _save_config(self):
-        with open(self.config_path, 'w') as f:
+        with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=2)
         print("Config saved!")
 
@@ -142,11 +97,12 @@ class FeedbackUI(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
 
-        # Command frame
-        command_frame = QFrame()
-        command_layout = QHBoxLayout(command_frame)
-        command_layout.setContentsMargins(5, 5, 5, 5)
+        # Command section
+        command_group = QGroupBox("Command")
+        command_layout = QVBoxLayout(command_group)
 
+        # Command input row
+        command_input_layout = QHBoxLayout()
         command_label = QLabel("Command:")
         self.command_entry = QLineEdit()
         self.command_entry.setText(self.config["run_command"])
@@ -155,16 +111,13 @@ class FeedbackUI(QMainWindow):
         self.run_button = QPushButton("Run")
         self.run_button.clicked.connect(self._run_command)
 
-        command_layout.addWidget(command_label)
-        command_layout.addWidget(self.command_entry)
-        command_layout.addWidget(self.run_button)
-        layout.addWidget(command_frame)
+        command_input_layout.addWidget(command_label)
+        command_input_layout.addWidget(self.command_entry)
+        command_input_layout.addWidget(self.run_button)
+        command_layout.addLayout(command_input_layout)
 
-        # Auto-execute frame
-        auto_frame = QFrame()
-        auto_layout = QHBoxLayout(auto_frame)
-        auto_layout.setContentsMargins(5, 0, 5, 5)
-
+        # Auto-execute and save config row
+        auto_layout = QHBoxLayout()
         self.auto_check = QCheckBox("Execute automatically")
         self.auto_check.setChecked(self.config.get("execute_automatically", False))
         self.auto_check.stateChanged.connect(self._update_config)
@@ -175,21 +128,46 @@ class FeedbackUI(QMainWindow):
         auto_layout.addWidget(self.auto_check)
         auto_layout.addStretch()
         auto_layout.addWidget(save_button)
-        layout.addWidget(auto_frame)
+        command_layout.addLayout(auto_layout)
 
-        # Feedback section
+        layout.addWidget(command_group)
+
+        # Feedback section with fixed size
         feedback_group = QGroupBox("Feedback")
         feedback_layout = QVBoxLayout(feedback_group)
+        feedback_group.setFixedHeight(150)  # Fixed height for feedback section
 
         prompt_label = QLabel(self.prompt)
         self.feedback_text = FeedbackTextEdit()
+        self.feedback_text.setMinimumHeight(60)  # Set minimum height for feedback text box
         submit_button = QPushButton("Submit Feedback")
         submit_button.clicked.connect(self._submit_feedback)
 
         feedback_layout.addWidget(prompt_label)
         feedback_layout.addWidget(self.feedback_text)
         feedback_layout.addWidget(submit_button)
-        layout.addWidget(feedback_group)
+
+        # Console section (takes remaining space)
+        console_group = QGroupBox("Console")
+        console_layout = QVBoxLayout(console_group)
+        console_group.setMinimumHeight(200)  # Minimum height for console
+
+        # Log text area
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        console_layout.addWidget(self.log_text)
+
+        # Clear button
+        button_layout = QHBoxLayout()
+        self.clear_button = QPushButton("Clear")
+        self.clear_button.clicked.connect(self.clear_logs)
+        button_layout.addStretch()
+        button_layout.addWidget(self.clear_button)
+        console_layout.addLayout(button_layout)
+
+        # Add widgets in reverse order (feedback at bottom)
+        layout.addWidget(console_group, stretch=1)  # Takes all remaining space
+        layout.addWidget(feedback_group)  # Fixed size, no stretch
 
     def _update_config(self):
         self.config = {
@@ -199,7 +177,10 @@ class FeedbackUI(QMainWindow):
 
     def _append_log(self, text: str):
         self.log_buffer.append(text)
-        self.console.append_log(text)
+        self.log_text.append(text.rstrip())
+        cursor = self.log_text.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.log_text.setTextCursor(cursor)
 
     def _check_process_status(self):
         if self.process and self.process.poll() is not None:
@@ -221,13 +202,10 @@ class FeedbackUI(QMainWindow):
 
         command = self.command_entry.text()
         if not command:
-            self.console.append_log("Please enter a command to run\n")
+            self._append_log("Please enter a command to run\n")
             return
 
-        if not self.console.isVisible():
-            self.console.show()
-
-        self.console.append_log(f"$ {command}\n")
+        self._append_log(f"$ {command}\n")
         self.run_button.setText("Stop")
 
         try:
@@ -242,7 +220,7 @@ class FeedbackUI(QMainWindow):
             )
 
             def read_output(pipe):
-                for line in iter(pipe.readline, ''):
+                for line in iter(pipe.readline, ""):
                     self.log_signals.append_log.emit(line)
 
             threading.Thread(
@@ -263,23 +241,27 @@ class FeedbackUI(QMainWindow):
             self.status_timer.start(100)  # Check every 100ms
 
         except Exception as e:
-            self.console.append_log(f"Error running command: {str(e)}\n")
+            self._append_log(f"Error running command: {str(e)}\n")
             self.run_button.setText("&Run")
 
     def _submit_feedback(self):
         self.feedback_result = FeedbackResult(
+            logs="".join(self.log_buffer),
             user_feedback=self.feedback_text.toPlainText().strip(),
-            logs="".join(self.log_buffer)
         )
         self.close()
 
-    def closeEvent(self, event):
-        # Save window geometry
-        settings = QSettings('UserFeedback', 'MainWindow')
-        settings.setValue('geometry', self.saveGeometry())
+    def clear_logs(self):
+        self.log_text.clear()
 
-        if self.console:
-            self.console.close()
+    def closeEvent(self, event):
+        # Save window geometry and state
+        settings = QSettings("UserFeedback", "MainWindow")
+        settings.setValue("geometry", self.saveGeometry())
+        settings.setValue("windowState", self.saveState())
+
+        if self.process:
+            self.process.terminate()
         super().closeEvent(event)
 
     def run(self) -> FeedbackResult:
@@ -290,7 +272,7 @@ class FeedbackUI(QMainWindow):
             self.process.terminate()
 
         if not self.feedback_result:
-            return FeedbackResult(user_feedback="", logs="".join(self.log_buffer))
+            return FeedbackResult(logs="".join(self.log_buffer), user_feedback="")
 
         return self.feedback_result
 
