@@ -1,5 +1,6 @@
 import json
 import os
+import argparse
 import subprocess
 import threading
 from datetime import datetime
@@ -10,7 +11,22 @@ from PySide6.QtWidgets import (
     QGroupBox, QDialog
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer
-from PySide6.QtGui import QTextCursor, QIcon
+from PySide6.QtGui import QTextCursor, QIcon, QKeyEvent
+
+class FeedbackTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key_Return and event.modifiers() == Qt.ControlModifier:
+            # Find the parent FeedbackUI instance and call submit
+            parent = self.parent()
+            while parent and not isinstance(parent, FeedbackUI):
+                parent = parent.parent()
+            if parent:
+                parent._submit_feedback()
+        else:
+            super().keyPressEvent(event)
 
 class FeedbackResult(TypedDict):
     user_feedback: str
@@ -150,7 +166,7 @@ class FeedbackUI(QMainWindow):
         feedback_layout = QVBoxLayout(feedback_group)
 
         prompt_label = QLabel(self.prompt)
-        self.feedback_text = QTextEdit()
+        self.feedback_text = FeedbackTextEdit()
         submit_button = QPushButton("Submit Feedback")
         submit_button.clicked.connect(self._submit_feedback)
 
@@ -261,13 +277,10 @@ def feedback_ui(project_directory: str, prompt: str) -> FeedbackResult:
     return ui.run()
 
 if __name__ == "__main__":
-    import argparse
-    import os
-
     parser = argparse.ArgumentParser(description="Run the feedback UI")
     parser.add_argument("--prompt", default="Give your feedback", help="The prompt to show to the user")
     args = parser.parse_args()
 
     result = feedback_ui(os.getcwd(), args.prompt)
-    print(f"\nFeedback received: {result['user_feedback']}")
+    print(f"\nFeedback received:\n{result['user_feedback']}")
     print(f"\nLogs collected: \n{result['logs']}")
