@@ -309,6 +309,7 @@ class FeedbackUI(QMainWindow):
                 bufsize=1,
                 encoding="utf-8",
                 errors="ignore",
+                close_fds=True,
             )
 
             def read_output(pipe):
@@ -368,19 +369,31 @@ class FeedbackUI(QMainWindow):
 
         return self.feedback_result
 
-def feedback_ui(project_directory: str, prompt: str) -> FeedbackResult:
+def feedback_ui(project_directory: str, prompt: str, output_file: Optional[str] = None) -> Optional[FeedbackResult]:
     app = QApplication.instance() or QApplication()
     app.setPalette(get_dark_mode_palette(app))
     app.setStyle("Fusion")
     ui = FeedbackUI(project_directory, prompt)
-    return ui.run()
+    result = ui.run()
+
+    if output_file and result:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(output_file) if os.path.dirname(output_file) else ".", exist_ok=True)
+        # Save the result to the output file
+        with open(output_file, "w") as f:
+            json.dump(result, f)
+        return None
+
+    return result
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the feedback UI")
     parser.add_argument("--project-directory", default=os.getcwd(), help="The project directory to run the command in")
     parser.add_argument("--prompt", default="I implemented the changes you requested.", help="The prompt to show to the user")
+    parser.add_argument("--output-file", help="Path to save the feedback result as JSON")
     args = parser.parse_args()
 
-    result = feedback_ui(args.project_directory, args.prompt)
-    print(f"\nLogs collected: \n{result['logs']}")
-    print(f"\nFeedback received:\n{result['user_feedback']}")
+    result = feedback_ui(args.project_directory, args.prompt, args.output_file)
+    if result:
+        print(f"\nLogs collected: \n{result['logs']}")
+        print(f"\nFeedback received:\n{result['user_feedback']}")
