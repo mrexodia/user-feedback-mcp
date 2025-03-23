@@ -374,9 +374,10 @@ def feedback_ui(project_directory: str, prompt: str) -> FeedbackResult:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the feedback UI")
+    parser.add_argument("--project-directory", default=os.getcwd(), help="The project directory to run the command in")
     parser.add_argument("--prompt", default="I implemented the changes you requested.", help="The prompt to show to the user")
     args = parser.parse_args()
 
-    result = feedback_ui(os.getcwd(), args.prompt)
+    result = feedback_ui(args.project_directory, args.prompt)
     print(f"\nFeedback received:\n{result['user_feedback']}")
     print(f"\nLogs collected: \n{result['logs']}")
