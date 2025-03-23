@@ -305,7 +305,9 @@ class FeedbackUI(QMainWindow):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                encoding="utf-8",
+                errors="ignore",
             )
 
             def read_output(pipe):
