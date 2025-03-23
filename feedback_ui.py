@@ -138,6 +138,7 @@ class FeedbackUI(QMainWindow):
 
         self.setWindowTitle("User Feedback")
         self.setWindowIcon(QIcon("icons/feedback.png"))
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
         self._create_ui()
 
@@ -381,5 +382,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     result = feedback_ui(args.project_directory, args.prompt)
-    print(f"\nFeedback received:\n{result['user_feedback']}")
     print(f"\nLogs collected: \n{result['logs']}")
+    print(f"\nFeedback received:\n{result['user_feedback']}")
