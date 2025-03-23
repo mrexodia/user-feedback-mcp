@@ -178,6 +178,15 @@ class FeedbackUI(QMainWindow):
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=2)
 
+    def _format_windows_path(self, path: str) -> str:
+        if sys.platform == "win32":
+            # Convert forward slashes to backslashes
+            path = path.replace("/", "\\")
+            # Capitalize drive letter if path starts with x:\
+            if len(path) >= 2 and path[1] == ":" and path[0].isalpha():
+                path = path[0].upper() + path[1:]
+        return path
+
     def _create_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -187,9 +196,13 @@ class FeedbackUI(QMainWindow):
         command_group = QGroupBox("Command")
         command_layout = QVBoxLayout(command_group)
 
+        # Working directory label
+        formatted_path = self._format_windows_path(self.project_directory)
+        working_dir_label = QLabel(f"Working directory: {formatted_path}")
+        command_layout.addWidget(working_dir_label)
+
         # Command input row
         command_input_layout = QHBoxLayout()
-        command_label = QLabel("Command:")
         self.command_entry = QLineEdit()
         self.command_entry.setText(self.config["run_command"])
         self.command_entry.returnPressed.connect(self._run_command)
@@ -197,7 +210,6 @@ class FeedbackUI(QMainWindow):
         self.run_button = QPushButton("&Run")
         self.run_button.clicked.connect(self._run_command)
 
-        command_input_layout.addWidget(command_label)
         command_input_layout.addWidget(self.command_entry)
         command_input_layout.addWidget(self.run_button)
         command_layout.addLayout(command_input_layout)
