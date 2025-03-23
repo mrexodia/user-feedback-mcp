@@ -85,15 +85,24 @@ def kill_tree(process: subprocess.Popen):
     killed: list[psutil.Process] = []
     parent = psutil.Process(process.pid)
     for proc in parent.children(recursive=True):
-        proc.kill()
-        killed.append(proc)
-    parent.kill()
+        try:
+            proc.kill()
+            killed.append(proc)
+        except psutil.Error:
+            pass
+    try:
+        parent.kill()
+    except psutil.Error:
+        pass
     killed.append(parent)
 
     # Terminate any remaining processes
     for proc in killed:
-        if proc.is_running():
-            proc.terminate()
+        try:
+            if proc.is_running():
+                proc.terminate()
+        except psutil.Error:
+            pass
 
 class FeedbackTextEdit(QTextEdit):
     def __init__(self, parent=None):
