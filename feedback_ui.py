@@ -104,6 +104,89 @@ def kill_tree(process: subprocess.Popen):
         except psutil.Error:
             pass
 
+def get_user_environment() -> dict[str, str]:
+    if sys.platform != "win32":
+        return os.environ.copy()
+
+    import ctypes
+    from ctypes import wintypes
+
+    # Load required DLLs
+    advapi32 = ctypes.WinDLL("advapi32")
+    userenv = ctypes.WinDLL("userenv")
+    kernel32 = ctypes.WinDLL("kernel32")
+
+    # Constants
+    TOKEN_QUERY = 0x0008
+
+    # Function prototypes
+    OpenProcessToken = advapi32.OpenProcessToken
+    OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    OpenProcessToken.restype = wintypes.BOOL
+
+    CreateEnvironmentBlock = userenv.CreateEnvironmentBlock
+    CreateEnvironmentBlock.argtypes = [ctypes.POINTER(ctypes.c_void_p), wintypes.HANDLE, wintypes.BOOL]
+    CreateEnvironmentBlock.restype = wintypes.BOOL
+
+    DestroyEnvironmentBlock = userenv.DestroyEnvironmentBlock
+    DestroyEnvironmentBlock.argtypes = [wintypes.LPVOID]
+    DestroyEnvironmentBlock.restype = wintypes.BOOL
+
+    GetCurrentProcess = kernel32.GetCurrentProcess
+    GetCurrentProcess.argtypes = []
+    GetCurrentProcess.restype = wintypes.HANDLE
+
+    CloseHandle = kernel32.CloseHandle
+    CloseHandle.argtypes = [wintypes.HANDLE]
+    CloseHandle.restype = wintypes.BOOL
+
+    # Get process token
+    token = wintypes.HANDLE()
+    if not OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)):
+        raise RuntimeError("Failed to open process token")
+
+    try:
+        # Create environment block
+        environment = ctypes.c_void_p()
+        if not CreateEnvironmentBlock(ctypes.byref(environment), token, False):
+            raise RuntimeError("Failed to create environment block")
+
+        try:
+            # Convert environment block to list of strings
+            result = {}
+            env_ptr = ctypes.cast(environment, ctypes.POINTER(ctypes.c_wchar))
+            offset = 0
+
+            while True:
+                # Get string at current offset
+                current_string = ""
+                while env_ptr[offset] != "\0":
+                    current_string += env_ptr[offset]
+                    offset += 1
+
+                # Skip null terminator
+                offset += 1
+
+                # Break if we hit double null terminator
+                if not current_string:
+                    break
+
+                equal_index = current_string.index("=")
+                if equal_index == -1:
+                    continue
+
+                key = current_string[:equal_index]
+                value = current_string[equal_index + 1:]
+                result[key] = value
+
+            return result
+
+        finally:
+            DestroyEnvironmentBlock(environment)
+
+    finally:
+        CloseHandle(token)
+
 class FeedbackTextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
