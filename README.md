@@ -51,7 +51,10 @@ To install the MCP server in Cline, follow these steps (see screenshot):
         "run",
         "server.py"
       ],
-      "timeout": 3600
+      "timeout": 600,
+      "autoApprove": [
+        "user_feedback"
+      ]
     }
   }
 }
