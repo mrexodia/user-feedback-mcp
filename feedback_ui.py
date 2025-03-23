@@ -400,6 +400,7 @@ class FeedbackUI(QMainWindow):
                 cwd=self.project_directory,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                env=get_user_environment(),
                 text=True,
                 bufsize=1,
                 encoding="utf-8",
