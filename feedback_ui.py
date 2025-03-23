@@ -357,6 +357,7 @@ class FeedbackUI(QMainWindow):
         self.close()
 
     def clear_logs(self):
+        self.log_buffer = []
         self.log_text.clear()
 
     def closeEvent(self, event):
