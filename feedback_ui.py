@@ -494,3 +494,4 @@ if __name__ == "__main__":
     if result:
         print(f"\nLogs collected: \n{result['logs']}")
         print(f"\nFeedback received:\n{result['user_feedback']}")
+    sys.exit(0)
