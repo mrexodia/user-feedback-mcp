@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mrexodia-user-feedback-mcp-badge.png)](https://mseep.ai/app/mrexodia-user-feedback-mcp)
+
 # User Feedback MCP
 
 Simple [MCP Server](https://modelcontextprotocol.io/introduction) to enable a human-in-the-loop workflow in tools like [Cline](https://cline.bot) and [Cursor](https://www.cursor.com). This is especially useful for developing desktop applications that require complex user interactions to test.
