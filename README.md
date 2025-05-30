@@ -1,5 +1,7 @@
 # User Feedback MCP
 
+[![smithery badge](https://smithery.ai/badge/@mrexodia/user-feedback-mcp)](https://smithery.ai/server/@mrexodia/user-feedback-mcp)
+
 Simple [MCP Server](https://modelcontextprotocol.io/introduction) to enable a human-in-the-loop workflow in tools like [Cline](https://cline.bot) and [Cursor](https://www.cursor.com). This is especially useful for developing desktop applications that require complex user interactions to test.
 
 ![Screenshot showing the feedback UI](https://github.com/mrexodia/user-feedback-mcp/blob/main/.github/feedback-ui.png?raw=true)
@@ -27,6 +29,15 @@ This configuration will be loaded on startup and if `execute_automatically` is e
 
 ## Installation (Cline)
 
+### Installing via Smithery
+
+To install User Feedback for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mrexodia/user-feedback-mcp):
+
+```bash
+npx -y @smithery/cli install @mrexodia/user-feedback-mcp --client claude
+```
+
+### Installing Manually
 To install the MCP server in Cline, follow these steps (see screenshot):
 
 ![Screenshot showing installation steps](https://github.com/mrexodia/user-feedback-mcp/blob/main/.github/cline-installation.png?raw=true)
